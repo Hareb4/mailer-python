@@ -67,7 +67,3 @@ The application will run on `http://localhost:5000` by default. Ensure that your
 
 - The backend provides an endpoint `/send-email` for sending emails.
 - Ensure that the frontend is running on `http://localhost:8080` to match the CORS configuration.
-
-## Contact
-
-For any inquiries, please contact [your-email@example.com](mailto:your-email@example.com).
