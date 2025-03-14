@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is the backend component of the Mailer application, responsible for handling email sending operations using Flask and Flask-SocketIO.
+This is the backend component of the [Mailer application](https://github.com/Hareb4/mailer), responsible for handling email sending operations using Flask and Flask-SocketIO.
 
 ## Installation
 
@@ -67,7 +67,3 @@ The application will run on `http://localhost:5000` by default. Ensure that your
 
 - The backend provides an endpoint `/send-email` for sending emails.
 - Ensure that the frontend is running on `http://localhost:8080` to match the CORS configuration.
-
-## Contact
-
-For any inquiries, please contact [your-email@example.com](mailto:your-email@example.com).
