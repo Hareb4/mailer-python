@@ -24,6 +24,7 @@ It's recommended to use a virtual environment to manage dependencies. Here are t
 #### Windows
 
 1. **Create a Virtual Environment**:
+
    ```bash
    python -m venv venv
    ```
@@ -36,6 +37,7 @@ It's recommended to use a virtual environment to manage dependencies. Here are t
 #### macOS/Linux
 
 1. **Create a Virtual Environment**:
+
    ```bash
    python3 -m venv venv
    ```
@@ -63,11 +65,66 @@ python app.py
 
 The application will run on `http://localhost:5000` by default. Ensure that your frontend is configured to communicate with this backend.
 
+### Note on Port Configuration
+
+The Flask application is configured to accept requests from any origin, thanks to the following setup in `app.py`:
+
+```python
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*")
+```
+
+This allows the backend to receive requests from any domain or port. If you want to restrict access—for example, to only allow requests from `http://localhost:4000`—modify the configuration like this:
+
+```python
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "http://localhost:4000"}})
+socketio = SocketIO(app, cors_allowed_origins="http://localhost:4000")
+```
+
+## Endpoints
+
+The backend provides the following endpoints for email operations:
+
+### 1. **Send Email**
+
+- **Endpoint**: `/send-email`
+- **Method**: `POST`
+- **Description**: Sends multiple emails based on the provided data.
+- **Request Body**:
+  - `smtp_server`: SMTP server address.
+  - `port`: SMTP server port.
+  - `sender_email`: Email address of the sender.
+  - `sender_password`: Password for the sender's email account.
+  - `smtp_from`: The "From" address for the email.
+  - `excelFile`: Excel file containing recipient details.
+  - `subject_template`: Template for the email subject.
+  - `body_template`: Template for the email body.
+  - `attachments`: List of PDF attachments.
+  - `posters`: List of image attachments.
+  - `poster_url`: URL for poster images.
+
+### 2. **Send Test Email**
+
+- **Endpoint**: `/send-test`
+- **Method**: `POST`
+- **Description**: Sends a test email to the specified address.
+- **Request Body**:
+  - Same parameters as `/send-email`, but only requires the test email address.
+
+### 3. **Test Connection**
+
+- **Endpoint**: `/test-connection`
+- **Method**: `GET`
+- **Description**: Tests the connection to the backend.
+- **Response**: Returns a JSON object indicating success.
+
 ## Usage
 
-- The backend provides an endpoint `/send-email` for sending emails.
-- Ensure that the frontend is running on `http://localhost:8080` to match the CORS configuration.
+- Ensure that your frontend is configured to communicate with this backend running on `http://localhost:5000`.
+- The application now includes enhanced error handling and logging for email sending operations.
 
 ## Contact
 
-For any inquiries, please contact [your-email@example.com](mailto:your-email@example.com).
+For any inquiries, please contact [hareb.div@gmail.com](mailto:hareb.div@gmail.com).

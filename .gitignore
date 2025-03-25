@@ -11,3 +11,9 @@ __pycache__/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# log files
+*.log
+
+# email log file
+email_log.txt

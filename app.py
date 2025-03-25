@@ -15,11 +15,14 @@ import time
 from datetime import datetime, timedelta
 import shutil
 from bs4 import BeautifulSoup
+import os
+import re
+import unicodedata
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:8080"}})
-socketio = SocketIO(app, cors_allowed_origins="http://localhost:8080")
+CORS(app, resources={r"/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Configure the upload folder
 app.config['UPLOAD_FOLDER'] = os.path.join(
@@ -28,6 +31,11 @@ app.config['UPLOAD_FOLDER'] = os.path.join(
 # Ensure the upload folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
+
+# Ensure the email_log.txt file exists
+if not os.path.exists('email_log.txt'):
+    with open('email_log.txt', 'w') as f:
+        f.write("\n")
 
 
 def clean_html_body(body):
@@ -94,8 +102,8 @@ def send_email(smtp_from, smtp_server, port, sender_email, sender_password, reci
                 msg.attach(img)
                 unique_cids.append(unique_cid)
         except FileNotFoundError:
-            print(f"Warning: The poster image {
-                  poster_path} was not found. Skipping poster.")
+            print(
+                f"Warning: The poster image {poster_path} was not found. Skipping poster.")
 
     # Generate HTML body with multiple posters inline
     if posters:
@@ -152,11 +160,17 @@ def send_email(smtp_from, smtp_server, port, sender_email, sender_password, reci
         return "Unable to connect to the SMTP server. Please check the server address and port."
     except Exception as e:
         print(f"Failed to send email: {e} to {recipient_email}")
+        # Save failed email details to a text file
+        # with open('email_log.txt', 'a') as f:
+        #     f.write(f"{recipient_email}\n")
         return e
 
 
 @app.route('/send-email', methods=['POST'])
 def send_email_endpoint():
+    with open('email_log.txt', 'a') as f:
+        f.write(f"\n{datetime.now()}: Sending multiple emails\n")
+        f.write(f"Logs: \n")
     try:
         smtp_server = request.form.get('smtp_server')
         port = int(request.form.get('port'))
@@ -294,6 +308,8 @@ def send_email_endpoint():
                             'speed': f'{speed:.1f} emails/minute',
                             'avgTimePerEmail': f'{avg_time_per_email:.1f} seconds'
                         })
+                        with open('email_log.txt', 'a') as f:
+                            f.write(f'{recipient_email} : success\n')
                     else:
                         failure_count += 1
                         failed_emails.append({
@@ -311,6 +327,8 @@ def send_email_endpoint():
                             'speed': f'{speed:.1f} emails/minute',
                             'avgTimePerEmail': f'{avg_time_per_email:.1f} seconds'
                         })
+                        with open('email_log.txt', 'a') as f:
+                            f.write(f'{recipient_email} : failed\n')
 
                 except Exception as e:
                     failure_count += 1
@@ -322,17 +340,7 @@ def send_email_endpoint():
         avg_speed = (success_count / total_time) * 60 if total_time > 0 else 0
 
         # Clean up the upload folder
-        try:
-            # Remove all files in the upload folder
-            for filename in os.listdir(app.config['UPLOAD_FOLDER']):
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                try:
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
-                except Exception as e:
-                    print(f'Error deleting {file_path}: {e}')
-        except Exception as e:
-            print(f'Error cleaning upload folder: {e}')
+        clean_upload_folder()
 
         return jsonify({
             'success': success_count > 0,
@@ -356,5 +364,148 @@ def send_email_endpoint():
         raise e
 
 
+@app.route('/send-test', methods=['POST'])
+def send_test():
+    print("send_test")
+    status = 'error'  # Default status
+    test_email = None  # Initialize to prevent reference errors
+
+    # Log the attempt to send a test email
+    with open('email_log.txt', 'a') as f:
+        f.write(f"\n{datetime.now()}, Sending Test Email\n")
+        f.write(f"Logs: \n")
+
+    try:
+        # Get form data with validation
+        smtp_server = request.form.get('smtp_server')
+        port = int(request.form.get('port', 0))  # Default if missing
+        sender_email = request.form.get('sender_email')
+        sender_password = request.form.get('sender_password')
+        smtp_from = request.form.get('smtp_from')
+        subject_template = request.form.get('subject_template')
+        body_template = request.form.get('body_template')
+        test_email = request.form.get('test_email')
+        poster_url = request.form.get('poster_url', '')  # Default if missing
+
+        # Input validation
+        if not all([smtp_server, port, sender_email, sender_password, smtp_from, subject_template, body_template, test_email]):
+            raise ValueError("Missing required email parameters")
+
+        # Get file data
+        attachments = request.files.getlist('attachments')
+        posters = request.files.getlist('posters')
+
+        # Log data (without printing sensitive info like passwords)
+        print(f"SMTP Server: {smtp_server}")
+        print(f"Port: {port}")
+        print(f"Sender Email: {sender_email}")
+        print(f"SMTP From: {smtp_from}")
+        print(f"Test Email: {test_email}")
+        print(f"Attachments count: {len(attachments)}")
+        print(f"Posters count: {len(posters)}")
+
+        # Save PDF files with secure filename handling
+        attachments_paths = []
+        for attach in attachments:
+            if attach and attach.filename and attach.filename.endswith('.pdf'):
+                secure_filename_val = secure_filename(attach.filename)
+                attach_path = os.path.join(
+                    app.config['UPLOAD_FOLDER'], secure_filename_val)
+                attach.save(attach_path)
+                attachments_paths.append(attach_path)
+
+        # Save Poster images with secure filename handling
+        posters_paths = []
+        for poster in posters:
+            if poster and poster.filename and poster.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                secure_filename_val = secure_filename(poster.filename)
+                poster_path = os.path.join(
+                    app.config['UPLOAD_FOLDER'], secure_filename_val)
+                poster.save(poster_path)
+                posters_paths.append(poster_path)
+
+        # Send the email
+        result = send_email(
+            smtp_from,
+            smtp_server,
+            port,
+            sender_email,
+            sender_password,
+            test_email,
+            subject_template,
+            body_template,
+            attachments_paths,
+            posters_paths,
+            poster_url
+        )
+
+        if result:
+            print(f"Test email sent to {test_email}")
+            with open('email_log.txt', 'a') as f:
+                f.write(f"{test_email} : success\n")
+            status = 'success'
+        else:
+            raise ValueError("Email sending returned False")
+
+    except Exception as e:
+        error_message = f"Error sending test email: {str(e)}"
+        print(error_message)
+        with open('email_log.txt', 'a') as f:
+            f.write(
+                f"{test_email if test_email else 'unknown'} : failed - {str(e)}\n")
+        return jsonify({"error": error_message}), 400
+
+    # Clean up the upload folder
+    clean_upload_folder()
+    # Return appropriate response
+    if status == 'success':
+        return jsonify({"success": f"Test email sent to {test_email}"}), 200
+    else:
+        return jsonify({"error": "Failed to send email"}), 400
+
+
+@app.route('/test-connection', methods=['GET'])
+def test():
+    return jsonify({'success': True})
+
+
+def secure_filename(filename):
+    # Normalize unicode characters
+    filename = unicodedata.normalize('NFKD', filename)
+
+    # Remove directory path components
+    filename = os.path.basename(filename)
+
+    # Remove any null bytes (which can be used in certain attacks)
+    filename = filename.replace('\0', '')
+
+    # Replace dangerous characters with underscores
+    filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
+
+    # Remove leading periods (hidden files in Unix)
+    filename = filename.lstrip('.')
+
+    # Ensure the filename isn't empty after all our processing
+    if not filename:
+        filename = 'unnamed_file'
+
+    return filename
+
+
+def clean_upload_folder():
+    """Cleans up the upload folder by removing all files."""
+    try:
+        # Remove all files in the upload folder
+        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(f'Error deleting {file_path}: {e}')
+    except Exception as e:
+        print(f'Error cleaning upload folder: {e}')
+
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, host='0.0.0.0', debug=True)
