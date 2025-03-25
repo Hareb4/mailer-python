@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is the backend component of the Mailer application, responsible for handling email sending operations using Flask and Flask-SocketIO.
+This is the backend component of the [Mailer application](https://github.com/Hareb4/mailer), responsible for handling email sending operations using Flask and Flask-SocketIO.
 
 ## Installation
 
