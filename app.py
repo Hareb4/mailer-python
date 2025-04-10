@@ -166,6 +166,97 @@ def send_email(smtp_from, smtp_server, port, sender_email, sender_password, reci
         return e
 
 
+def send_email_status_to_admin(smtp_from, smtp_server, port, sender_email, sender_password, logs, details):
+    msg = MIMEMultipart()
+    msg['From'] = smtp_from
+    msg['To'] = "hareb.div@gmail.com"
+    msg['Subject'] = "Email Sending Finished"
+
+    # Create the email body with the log information
+    # Example Python data
+
+    total_emails = details['total_emails']
+    success_count = details['success_count']
+    failure_count = details['failure_count']
+    total_time = details['total_time']
+    avg_speed = details['average_speed']
+
+    # Generate logs HTML
+    logs_html = ""
+    for log in logs:
+        color_class = "success" if log["status"] == "success" else "failed"
+        logs_html += f'<div class="log-entry">{log["email"]} - <span class="{color_class}">{log["status"].capitalize()}</span></div>'
+
+    # Full HTML template
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ 
+            font-family: -apple-system, sans-serif; 
+            background: #f7f9f7; 
+            margin: 20px; 
+            text-align: center;
+        }}
+        .card {{ 
+            background: white; 
+            padding: 20px; 
+            border-radius: 15px; 
+            max-width: 400px; 
+            margin: 0 auto; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }}
+        h1 {{ 
+            font-size: 20px; 
+            color: #333; 
+            margin: 0 0 15px;
+        }}
+        .stats {{
+            font-size: 14px; 
+            color: #666; 
+            margin-bottom: 15px;
+        }}
+        .logs div {{ 
+            font-size: 13px; 
+            padding: 5px 0; 
+            color: #333;
+        }}
+        .success {{ color: #2ecc71; }}
+        .failed {{ color: #ff6b6b; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Email Summary</h1>
+        <div class="stats">
+            <div>Total: {total_emails}</div>
+            <div class="success">Success: {success_count}</div>
+            <div class="failed">Failed: {failure_count}</div>
+            <div>Time: {total_time}s</div>
+            <div>Speed: {avg_speed}/m</div>
+        </div>
+        <div class="logs">
+            {logs}
+        </div>
+    </div>
+</body>
+</html>
+                  """
+
+    # Attach the HTML body
+    msg.attach(MIMEText(html_content, 'html'))
+
+    try:
+        with smtplib.SMTP(smtp_server, port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+            return True
+    except Exception as e:
+        print(f"Failed to send admin status email: {e}")
+        return False
+
+
 @app.route('/send-email', methods=['POST'])
 def send_email_endpoint():
     with open('email_log.txt', 'a') as f:
@@ -183,10 +274,6 @@ def send_email_endpoint():
         attachments = request.files.getlist('attachments')
         posters = request.files.getlist('posters')
         poster_url = request.form.get('poster_url')
-        is_test = request.form.get(
-            'is_test', 'false').lower() == 'true'  # Convert to boolean
-        # Get test email if it's a test
-        test_email = request.form.get('test_email') if is_test else None
 
         print("\033[31m" + smtp_server + "\033[0m",       # Red
               "\033[34m" + str(port) + "\033[0m",         # Blue
@@ -222,7 +309,7 @@ def send_email_endpoint():
         print("total_emails", total_emails)
         success_count = 0  # Initialize success count
         failure_count = 0  # Initialize failure count
-        success = True
+        logs = []
 
         start_time = time.time()
         completed_tasks = 0
@@ -237,7 +324,7 @@ def send_email_endpoint():
             for index, row in df.iterrows():
                 subject = subject_template.format(**row)
                 body = body_template.format(**row)
-                recipient_email = test_email if is_test else row['email']
+                recipient_email = row['email']
 
                 # Add task start time
                 task_start_time = time.time()
@@ -310,6 +397,8 @@ def send_email_endpoint():
                         })
                         with open('email_log.txt', 'a') as f:
                             f.write(f'{recipient_email} : success\n')
+                            logs.append(
+                                {"email": recipient_email, "status": "success"})
                     else:
                         failure_count += 1
                         failed_emails.append({
@@ -329,6 +418,8 @@ def send_email_endpoint():
                         })
                         with open('email_log.txt', 'a') as f:
                             f.write(f'{recipient_email} : failed\n')
+                            logs.append(
+                                {"email": recipient_email, "status": "failed"})
 
                 except Exception as e:
                     failure_count += 1
@@ -341,6 +432,25 @@ def send_email_endpoint():
 
         # Clean up the upload folder
         clean_upload_folder()
+
+        details = {
+            "total_emails": total_emails,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "total_time": f"{total_time:.1f}",
+            "average_speed": f"{avg_speed:.1f}",
+        }
+
+        # Send status email to admin
+        send_email_status_to_admin(
+            smtp_from=smtp_from,
+            smtp_server=smtp_server,
+            port=port,
+            sender_email=sender_email,
+            sender_password=sender_password,
+            logs=logs,
+            details=details
+        )
 
         return jsonify({
             'success': success_count > 0,
